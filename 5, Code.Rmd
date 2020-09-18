@@ -1,0 +1,251 @@
+---
+title: "5, Code"
+author: "Lynn Huang"
+date: "August 19, 2020"
+output: pdf_document
+---
+
+```{r setup, echo=FALSE}
+rm(list=ls())
+library(tidyverse)
+library(dplyr)
+setwd("C:/Users/lynn/OneDrive/Documents/ADULT/NCSU/ST558, Data Science for Statisticians")
+```
+
+#### 5.1 Writing R Functions: Basics
+```{r}
+# Can view code of function by typing function name. help() to view description
+var
+help(var)
+colMeans
+# Generic functions have many versions in different packages, so specify package
+mean
+mean.default
+
+# Write function that takes vector of values and standardizes (like Z score)
+standardize <- function(vector) {
+  return((vector - mean(vector)) / sd(vector))
+}
+(data <- runif(5))
+(result <- standardize(data))
+# Check standardized result has mean 0, sd 1 now
+mean(result)
+sd(result)
+
+# Add more inputs to make centering, scaling optional. Can set default args in function statement
+standardize <- function(vector, center=TRUE, scale=TRUE) {
+  if (center) {
+    vector <- vector - mean(vector)
+  }
+  if (scale) {
+    vector <- vector / sd(vector)
+  }
+  return(vector)
+}
+# Same outputs as original standardize()
+(result <- standardize(data, center=TRUE, scale=TRUE))
+(result <- standardize(data))
+# Different output now
+(result <- standardize(data, center=FALSE, scale=FALSE))
+
+# Add more return values (like mean, sd) as a list of objects. Can name list elements too
+standardize <- function(vector, center=TRUE, scale=TRUE) {
+  mean <- mean(vector)
+  stdev <- sd(vector)
+  if (center) {
+    vector <- vector - mean
+  }
+  if (scale) {
+    vector <- vector / stdev
+  }
+  return(list(result=vector, mean=mean, sd=stdev))
+}
+(result <- standardize(data))
+# Get sd out of returned list
+result[[2]]
+result$sd
+
+# Add unnamed arguments with ..., which can be used by functions inside our function
+standardize <- function(vector, center=TRUE, scale=TRUE, ...) {
+  mean <- mean(vector, ...)
+  stdev <- sd(vector, ...)
+  if (center) {
+    vector <- vector - mean
+  }
+  if (scale) {
+    vector <- vector / stdev
+  }
+  return(list(result=vector, mean=mean, sd=stdev))
+}
+(sData <- standardize(airquality$Ozone, na.rm=TRUE))
+sData$result
+sData$sd
+
+# list(...) will get unnamed args
+f <- function(x, ...) {
+  unnamed <- list(...)
+  modifyX <- x^2
+  return(list(newX=modifyX, dotDotDot=unnamed))
+}
+f(x=10, a=1, b=list(char="hey there", num=1:3))
+
+# names() will get names of unnamed args
+f <- function(x, ...) {
+  unnamed <- names(list(...))
+  modifyX <- x^2
+  return(list(newX=modifyX, dotDotDot=unnamed))
+}
+f(x=10, a=1, b=list(char="hey there", num=1:3))
+```
+
+#### 5.2 Writing R Functions: 
+```{r}
+# R uses positional, explicit, and partial matching
+help(cor)
+cor(iris$Sepal.Length, iris$Sepal.Width)    # cor(x, y)
+cor(x=iris$Sepal.Length, y=iris$Sepal.Width, method="spearman")
+cor(iris$Sepal.Length, met="spearman", iris$Sepal.Width)
+
+# stop() will terminate funciton execution w/ error message
+transposeDF <- function(df) {
+  if (!is.data.frame(df)){
+    stop("I want a data frame only!")
+  }
+  t(df)
+}
+transposeDF(iris)               # OK
+transposeDF(as.matrix(iris))    # Bad
+
+# switch(EXPR, ...) evalutes expression and matches it to list of alternatives
+center <- function(vec, type, ...) {
+  if(!is.vector(vec)){
+    stop("Not a vector my friend.")
+  }
+  switch(type,
+         mean = vec - mean(vec),
+         median = vec - median(vec),
+         trimmed = vec - mean(vec, ...),
+         stop("Mistake!")
+  )
+}
+center(c(1, 1, 1, 6, 10), "mean")
+center(c(1, 1, 1, 6, 10), "median")
+center(c(1, 1, 1, 6, 10), "trimmed", trim=0.2)
+center(c(1, 1, 1, 6, 10), "foo)")
+
+# Lazy Evaluation: R only evaluates function args as needed
+run <- function(x) {
+  3
+}
+run(stop("Stop now!"))
+# force() R to evaluate formal arg
+run <- function(x) {
+  force(x)
+  3
+}
+run(stop("Stop now!"))
+
+# Lazy Evaluation: R only evalutes conditional logic as needed (short circuiting)
+x <- NULL
+# Nonsense comparison because NULL is not num, so instead of logical TRUE/FALSE, return 0
+x > 0
+# Nonsense comparison means no arg (length 0)
+if (x>0) {
+  print("Hey")
+}
+# Should check if null instead
+!is.null(x)
+# R evalutes first condition, gets FALSE, and skips evaluating second condition (thus, no error)
+if (!is.null(x) && x>0) {
+  print("Hey")
+}
+```
+
+#### 5.3 Writing R Functions: Digging Deeper
+```{r}
+# Pipeable functions can be transformations (return modified arg) or side-effect (do something else)
+# Error b/c printNumObs doesn't return df to pipe into summarize()
+iris <- tibble(iris)
+printNumObs <- function(df) {
+  cat("The number of observations in the data set is ", nrow(df), "\n", sep="")
+}
+iris %>% printNumObs %>% summarize(mean=mean(Sepal.Length))
+
+# Use invisible(df) to return something 'invisibly' w/o printing it
+printNumObs <- function(df) {
+  cat("The number of observations in the data set is ", nrow(df), "\n", sep="")
+  invisible(df)
+}
+iris %>% printNumObs %>% summarize(mean=mean(Sepal.Length))
+
+# What is returned invisible object like? Check structure (is df)
+temp <- printNumObs(iris)
+str(temp)
+
+# Infix functions go between args. Can be used as prefix function w/ backticks
+cars <- as.matrix(cars)
+t(cars) %*% cars
+`%*%` (t(cars), cars)
+# Can write your own infix functions with backticks too
+`%+%` <- function(a, b) paste0(a, b)
+"New" %+% "String"
+
+# Infix operators interpreted by decreasing precedence. <- is higher than =
+x <- y <- 2     # Good, save some typing
+x <- y = 2      # Error!
+x = y <- 2      # Okay, but not GPP
+# User-defined infix operators are always interpreted left to right, no precedence!
+`%-%` <- function(a, b){
+  paste0("(", a, " %-%", b, ")")
+}
+"a" %-% "b" %-% "c"
+
+# Packages are loaded as parents to the previous package. Search path starts Global -> Empty
+# Global Env is child of loaded packages, which are children of Base Env, which is child of Empty Env
+#install.packages("pryr")
+library(pryr)
+# Value x lives in global environment, whereas mean() function lives in base environment
+x <- "Hey"
+where("x")
+where("mean")
+
+# Functions create temp env, so objects don't exist after function call (can overwrite in function!)
+f <- function(x) {
+  mean <- paste0(x, " is a value")
+  mean
+}
+f(1:3)
+# But, mean is still a function when I'm done, not a value
+mean
+
+# Again, value a only exists in function, so we re-define a each time we call g()
+g <- function(x) {
+  if (!exists("a", inherits=FALSE)) {
+    message("Defining a")
+    a <- 1
+  }
+  else {
+    a <- a + 1
+  }
+  a
+}
+g(10); g(10)
+
+# Variables can have same name in global env and function env
+y <- 10
+f <- function(x) {
+  y <- 1
+  x+y
+}
+# Will get 15+1 b/c function's y=1 is used, not global y=10
+f(15)
+
+# If object doesn't exist in current env, R will search back up the path back to global env
+y <- 1
+f <- function(x) {
+  x+y
+}
+# Will get 10+1 b/c function's y is undefined, so R searches and finds global y=1
+f(10)
+```
+

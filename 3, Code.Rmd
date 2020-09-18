@@ -1,0 +1,85 @@
+---
+title: "3, Code"
+author: "Lynn Huang"
+date: "August 18, 2020"
+output:
+  pdf_document:
+    toc: yes
+  html_document:
+    toc: yes
+    toc_float: yes
+---
+```{r setup, include=FALSE}
+# echo=FALSE will hide code
+# eval=FALSE will not evaluate/execute code
+# include=FALSE is like echo and eval both FALSE
+# message=FALSE, warning=FALSE will hide messages and warnings
+# error=TRUE will allow file to be created even if code has an error
+# cache=TRUE means output saved and code not rerun unless it changes (delete cache before rerun)
+# Set global options to show all code
+knitr::opts_chunk$set(echo=TRUE, cache=TRUE)
+# Can easily toggle comments on/off to change which global options are engaged
+#knitr:: opts_chunk$set(echo=FALSE)
+```
+
+#### 3.1 R Markdown: Introduction
+#### 3.2 R Markdwon: Syntax & Code Chunks
+End a line with 2 spaces to make new paragraph.  
+Or specify line break.<br>
+*italics*  
+**bold**  
+superscript^2^  
+subscript~2~  
+~~strikethrough~~  
+[blog](https://lynnshuang.github.io)  
+
+# Header1
+## Header2
+### Header3
+#### Header4
+##### Header5
+###### Header6
+
+`Hacker code`
+
+* Unordered List  
+* This list has no order
+    - Sub-item 1
+    - Sub-item 2
+        - Sub-Sub-item 1
+        - Sub-Sub-item 2
+
+1. Ordered List  
+2. This list has order
+    - Sub-item 1
+    - Sub-item 2
+        - Sub-Sub-item 1
+        - Sub-Sub-item 2
+
+Can dynamically add code:  
+Iris has `r length(iris$Sepal.Length)`.  
+
+#### Graphics
+![](C:/Users/lynn/OneDrive/Pictures/Saved Pictures/Headshot.JPG)
+Use built-in `include_graphics` function in `knitr` package to control size and scale of images.  
+```{r graphics, out.width="800px", echo=FALSE}
+knitr::include_graphics("C:/Users/lynn/OneDrive/Pictures/Saved Pictures/Headshot.JPG")
+```
+
+#### Equations
+Use LaTeX style code to make inline and block equations.  
+$A = \pi*r^{2}$
+$$A = \pi*r^{2}$$
+
+#### Tables
+Here is an ugly ass table. Don't forget 2 spaces after each line:  
+
+|Table Header |Second Header  |Third Header |  
+|:------------|--------------:|------------:|  
+|Table Cell   |Cell (1, 2)    |Cell (1, 3)  |  
+|Cell (2, 1)  |Cell (2, 2)    |Cell (2, 3)  |  
+
+Here is a much nicer table.  
+```{r}
+knitr::kable(summary(cars))
+```

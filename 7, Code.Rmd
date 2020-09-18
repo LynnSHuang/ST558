@@ -1,0 +1,117 @@
+---
+title: "7, Code"
+author: "Lynn Huang"
+date: "August 31, 2020"
+output: pdf_document
+---
+  
+```{r setup, echo=FALSE}
+rm(list=ls())
+library(tidyverse)
+setwd("C:/Users/lynn/OneDrive/Documents/ADULT/NCSU/ST558, Data Science for Statisticians")
+```
+
+#### 7.1 Summarizing Data: Categorical Summaries
+```{r}
+titanicData <- read_csv(file="./Data/titanic.csv")
+titanicData
+
+# Contingency table
+help(table)
+table(titanicData$embarked)
+table(titanicData$survived)
+table(titanicData$sex)
+# Two-Way Table
+table(titanicData$survived, titanicData$sex)
+table(titanicData$survived, titanicData$embarked)
+table(titanicData$sex, titanicData$embarked)
+# Three-Way Table: By 3rd var level, make 2-way tables of 1st & 2nd vars
+(tab <- table(titanicData$sex, titanicData$embarked, titanicData$survived))
+str(tab)
+# Can reference values of sex, embarked, survived in 3-D array
+tab[1, , ]    # For sex[1] = "female", get 2-way table of embarked vs survived
+tab[2, , ]    # For sex[2] = "male", get 2-way table of embarked vs survived
+tab[ ,1, ]    # For embarked[1] = "C", get 2-way table of sex vs survived
+tab[2,2, ]    # For sex[2] = "male" and embarked[2] = "Q", get 1-way table for survived
+```
+
+#### 7.2 Summarizing Data: Categorical Graphs
+```{r}
+library(ggplot2)
+# General ggplot2 Syntax
+#g <- ggplot(dataframe, aes(x= , y= , ...))
+#g + geom_type(...) + geom_type2(...) + labs(...)
+
+# 1-Variable Bar Plot
+# Base plot layer, set the x-axis to embarked var
+(g <- ggplot(data = titanicData, aes(x=embarked)))
+# Geom layer of actual plot (geom_bar knows only x=embarked used b/c in base layer)
+(g + geom_bar())
+# Improve by removing NA category?
+titanicData <- titanicData %>% drop_na(embarked)
+g <- ggplot(data=titanicData, aes(x=embarked))
+g + geom_bar()
+# Improve by adding labels and title
+g + geom_bar() + 
+  labs(x="City Embarked", title="Bar Plot of Embarked City for Titanic passengers") +
+  scale_x_discrete(labels=c("Cherbourg", "Queenstown", "Southampton"))
+
+# 2-Variable Bar Plot (filled or side-by-side)
+# Use same base layer for embarked, just add geom_bar() aesthetic options. Plus, default legend!
+g + geom_bar(aes(fill=as.factor(survived)))
+# Improve by adding labels for legend too
+# fill is the aes option, so use scale_fill_discrete() to make labels
+g + geom_bar(aes(fill=as.factor(survived))) + 
+  labs(x="City Embarked", title="Bar Plot of Embarked City for Titanic passengers") +
+  scale_x_discrete(labels=c("Cherbourg", "Queenstown", "Southampton")) +
+  scale_fill_discrete(name="Survived", labels=c("No", "Yes"))
+# Can even rotate it
+g + geom_bar(aes(fill=as.factor(survived))) + 
+  labs(x="City Embarked", title="Bar Plot of Embarked City for Titanic passengers") +
+  scale_x_discrete(labels=c("Cherbourg", "Queenstown", "Southampton")) +
+  scale_fill_discrete(name="Survived", labels=c("No", "Yes")) +
+  coord_flip()
+
+# geom and stat layers can produce equivalent calls
+g + geom_bar(aes(fill=as.factor(survived)))
+g + stat_count(aes(fill=as.factor(survived)))
+
+# Can modify stat (summary statistic) layer too
+help("geom_bar")
+# Summarize survivors by embarked & survived counts (like 2-way contingency table)
+sumData <- titanicData %>% group_by(embarked, survived) %>% summarize(count=n())
+g2 <- ggplot(sumData, aes(x=embarked, y=count))
+g2 + geom_bar(aes(fill=as.factor(survived)), stat="identity")
+
+# Position arguments can change geom_bar
+g + geom_bar(aes(fill=as.factor(survived)), position="dodge")
+g + geom_bar(aes(fill=as.factor(survived)), position="fill")
+
+# Quiz Question:
+# What layer could be used to change the labels that show up in the automatically created legend?
+# Color is the aes option, so use scale_color_discrete()
+ggplot(data = titanicData, aes(x = embarked)) + geom_bar(aes(color = as.factor(survived)), lwd = 2) +
+  scale_color_discrete(labels=c("No", "Yes"))
+
+# Save tables and graphs
+# write_csv() to save table
+# NOTE: Might need to name dimensions of table before as_tibble() will accept it
+tab <- as_tibble(table(titanicData$embarked, titanicData$survived, dnn=c("Embarked", "Survived")))
+names(tab) <- c("Embarked", "Survived", "Count")
+write_csv(x=tab, path="titanicTable.csv", col_names=TRUE)
+# ggsave() to save most recent plot
+# Or manually Export (less reproducible, you may not see it in code later)
+ggsave(filename="titanicBarPlot.png")
+
+```
+
+#### 7.3 Summarizing Data: Quantitative Summaries
+```{r}
+
+```
+
+#### 7.4 Summarizing Data: Quantitative Graphs
+```{r}
+
+```
+

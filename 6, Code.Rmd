@@ -1,0 +1,263 @@
+---
+title: "6, Code"
+author: "Lynn Huang"
+date: "August 24, 2020"
+output: pdf_document
+---
+  
+```{r setup, echo=FALSE}
+rm(list=ls())
+library(tidyverse)
+setwd("C:/Users/lynn/OneDrive/Documents/ADULT/NCSU/ST558, Data Science for Statisticians")
+```
+
+#### 6.1 Reading Data: Basics & CSV
+```{r}
+# scoreData is tibble. Cols are chr, dbl
+scoreData <- read_csv(file="https://www4.stat.ncsu.edu/~post/st558/datasets/scores.csv")
+scoreData
+str(scoreData)
+attributes(scoreData)$class
+# How did R know what type the cols were? guess_max=min(1000, n_max=Inf) reads first 1000 obs and guesses
+help(read_csv)
+
+# How does tidyverse read_csv() differ from Base R read.csv()?
+# Base R read.csv() is slower, BUT more importantly reads strings as factors
+# Factor = Special class of vector where levels = different classes. Good for categorical var
+is.factor(scoreData$day)
+scoreData$day <- as.factor(scoreData$day)
+levels(scoreData$day)
+# Factor levels are default alphabetical, but you can re-order when reading in
+scoreData$day <- ordered(scoreData$day, levels=c("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"))
+levels(scoreData$day)
+```
+
+#### 6.2 Reading Data: Standard Data Types
+```{r}
+# What if delimited file that isn't CSV?
+help(read_delim)
+# This file doesn't have col names, so we give our own
+umpData <- read_delim("https://www4.stat.ncsu.edu/~post/st558/datasets/umps2012.txt", delim=">",
+                      col_names=c("Year", "Month", "Day", "Home", "Away", "HPUmpire"))
+umpData
+
+# What if fixed field data (fixed width per col)?
+# Use fwf_empty() to create col positions from file
+help(read_fwf)
+cigData <- read_fwf("https://www4.stat.ncsu.edu/~post/st558/datasets/cigarettes.txt",
+                    col_positions=fwf_empty("https://www4.stat.ncsu.edu/~post/st558/datasets/cigarettes.txt",
+                                            col_names = c("brand", "tar", "nicotine", "weight", "co")))
+cigData
+# Uh-oh! We don't want to include header in there. Skip 1st row
+cigData <- read_fwf("https://www4.stat.ncsu.edu/~post/st558/datasets/cigarettes.txt",
+                    col_positions=fwf_empty("https://www4.stat.ncsu.edu/~post/st558/datasets/cigarettes.txt",
+                                            col_names = c("brand", "tar", "nicotine", "weight", "co")),
+                    skip=1)
+cigData
+# Can also hard code col widths
+cigData <- read_fwf("https://www4.stat.ncsu.edu/~post/st558/datasets/cigarettes.txt",
+                    col_positions=fwf_widths(c(17, 5, 9, 6, NA), 
+                                             col_names = c("brand", "tar", "nicotine", "weight", "co")),
+                    skip=1)
+cigData
+
+# What if Excel data?
+# Make sure Excel sheet is closed before trying to read!
+# Also, read_excel doesn't take URLs, only files on local machine
+library(readxl)
+edData <- read_excel("./Data/censusEd.xlsx", sheet="EDU01A")
+edData
+# read_excel() to look at sheets available
+excel_sheets("./Data/censusEd.xlsx")
+# range=cell_cols() option to specify cells within some contiguous range
+(edData <- read_excel("./Data/censusEd.xlsx", sheet=1, range=cell_cols("A:D")))
+
+# What if SPSS?
+install.packages("haven")
+library(haven)
+(bodyFatData <- read_spss("https://www4.stat.ncsu.edu/~post/st558/datasets/bodyFat.sav"))
+
+# What if SAS?
+# Recall: In SAS, you can add descriptive labels to vars (more useful than these var names)
+# Can view descriptive labels using str() or attr() b/c is attribute
+(smokeData <- read_sas("https://www4.stat.ncsu.edu/~post/st558/datasets/smoke2003.sas7bdat"))
+str(smokeData)
+attr(smokeData$SEQN, "label")
+
+# Write to CSV
+write_csv(x=smokeData, path="./Data/smokeDataOut.csv")
+```
+
+#### 6.3 Reading Data: Databases & SQL
+1. Connect to database w/ DBI::dbConnect(...)  
+2. Reference table in database w/ tbl()  
+3. Query database w/ SQL or dply/dbplyr::  
+```{r}
+# 1st, connect to databse using appropriate backend
+#install.packages("DBI")
+#install.packages("RSQLite")
+#install.packages("RMySQL")
+#install.packages("odbc")
+#install.packages("bigrquery")
+library(DBI)
+# General connection string
+con <- DBI::dbConnect(RMySQL::MySQL(),
+                      host = "hostname.website", 
+                      user = "username", 
+                      password = rsudioapi::askForPassword("DB Password"))
+# General table reference string
+new_data <- tbl(con, "name_of_table")
+```
+
+Now, let's practice creating and querying an SQLite database from RStudio.  
+We will practice dplyr functions to query 1 table and to join 2 tables
+```{r}
+library(DBI)
+library(RSQLite)
+# Set up empty database, then add Lahman baseball data
+my_db_file <- "lahman.sqlite"
+my_db <- src_sqlite(my_db_file, create=TRUE)
+my_db
+
+library(Lahman)
+help(Lahman)
+# Lahman is a database (originally set up for Microsoft Access) of 1871-2019 baseball player data
+# PlayerID (and other *ID variables) are keys that link different tables
+copy_to(my_db, Master)
+copy_to(my_db, Pitching)
+copy_to(my_db, Fielding)
+copy_to(my_db, Batting)
+copy_to(my_db, AwardsPlayers)
+copy_to(my_db, AwardsSharePlayers)
+my_db
+
+# Query with basic dplyr code (which produces SQL queries to use on your db)
+# show_query() to see SQL command generated
+temp <- tbl(my_db, "Pitching") %>% select(ends_with("ID")) %>% filter(yearID == 2010) %>% show_query()
+# Run this in console to see more details! temp is list of 2 objects for now
+temp
+
+# collect() to actually return everything from query into R object. temp becomes tibble (684x4)
+temp <- tbl(my_db, "Pitching") %>% select(ends_with("ID")) %>% filter(yearID == 2010) %>% collect()
+temp
+# This is the same result as running actual SQL code too
+temp <- tbl(my_db, sql("SELECT `playerID`, `yearID`, `teamID`, `lgID`
+                       FROM `Pitching`
+                       WHERE (`yearID` = 2010.0)")) %>% collect()
+temp
+
+## Practice left/right/inner/full joins on 2 data ests
+a <- tibble(color=c("Green", "Yellow", "Red"), num=1:3)
+b <- tibble(color=c("Green", "Yellow", "Pink"), size=c("S", "M", "L"))
+a; b
+# Inner join combines observations in a AND b
+inner_join(a, b)
+# Outer/full join combines observations in a OR b
+full_join(a, b)
+# Left join combines observations in a OR (a AND b). So, add to left table a
+left_join(a, b)
+# Right join combines observations in b OR (b AND a). So, add to right table b
+right_join(a, b)
+left_join(b, a)     # Same results b/c table order switched
+
+## Filtering Joins
+# Semi join keeps observations in a that match b
+semi_join(a, b)
+# Anti join removes observations in a that match b
+anti_join(a, b)
+
+## Join by Specified Key
+# What if keys don't have same var name in datasets? Specify BY key
+b <- b %>% rename(col=color)
+a; b
+inner_join(a, b)     # Will give error
+inner_join(a, b, by=c("color" = "col"))
+
+## More Complex?
+# Find the players, years, Wins for years after 2010 where the pitcher won an Award
+inner_join(select(tbl(my_db, "Pitching"), "playerID", "yearID", "W"),
+           select(tbl(my_db, "AwardsPlayers"), "playerID", "yearID", "awardID")) %>%
+  filter(yearID>2010) %>% show_query() %>% collect()
+# Can make SQL code more readable
+tbl(my_db, sql("SELECT `LHS`.`playerID` AS `playerID`, `LHS`.`yearID` AS `yearID`, `LHS`.`W` As `W`, 
+               `RHS`.`awardID` AS `awardID`
+               FROM (SELECT `playerID`, `yearID`, `W` FROM `Pitching`) AS `LHS`
+               INNER JOIN (SELECT `playerID`, `yearID`, `awardID` FROM `AwardsPlayers`) AS `RHS`
+               ON (`LHS`.`playerID` = `RHS`.`playerID` AND `LHS`.`yearID` = `RHS`.`yearID`)
+               WHERE (`LHS`.`yearID` > 2010.0)")) %>% collect()
+```
+
+
+#### 6.4 Reading Data: APIs
+You may need to request a key to access data at various APIs (like the US Census).  
+https://api.census.gov/data/key_signup.html
+```{r}
+install.packages("censusapi")
+library(censusapi)
+apis <- listCensusApis()
+head(apis)
+# Look at all the APIs of Census data you can access now!
+
+# Follow vignette example of getting 2016 uninsured rates by income group
+# Use Small Area Health Insurance Estimates API (SAHIE) for county and state level estimates
+sahie_vars <- listCensusMetadata(name="timeseries/healthins/sahie", type="variables")
+sahie_vars
+# Where do we want to look?
+llistCensusMetadata(name="timeseries/healthins/sahie", type="geography")
+
+# Once you have your API key, you can run this:
+sahie_states <- getCensus(name = "timeseries/healthins/sahie",
+                          vars = c("NAME", "IPRCAT", "IPR_DESC", "PCTUI_PT"),
+                          region = "state:*",
+                          time = 2016,
+                          key = "e267f117801b2ef741e54620602b0903c5f4d3c8")
+head(sahie_states)
+```
+
+#### 6.5 Reading Data: JSON & XML
+API data usually returned in JSON form.  
+```{r}
+#install.packages("RCurl")
+#install.packages("jsonlite")
+library(RCurl)
+library(jsonlite)
+# Practice using Harry Potter API to get information about spells
+baseURL <- "https://www.potterapi.com/v1/"
+value <- "spells?"
+key <- "key=$2a$10$UMvDCH.93fa2KOjKbJYkOOPMNzdzQpJ0gMnVEtcHzW5Ic04HUmcsa"
+URL <- paste0(baseURL, value, key)
+spellData <- RCurl::getURL(URL)
+
+# Comes back as JSON (ugly to look at now), but can conver to nice tibble!
+spellData
+df.spellData <- jsonlite::fromJSON(spellData)
+tibble(df.spellData)
+```
+
+API data may also come back in XML form (similar to JSON in that it's structured, just different structure).  
+```{r}
+#install.packages("xml2")
+library(xml2)
+
+# Complicated example on how to do XML data parsing
+#install.packages("ZillowR")
+library(ZillowR)
+parseZillow <- function(street) {
+  # One call to zillowR function to get results from zillow API
+  x <- ZillowR::GetDeepSearchResults(address = street,
+                                     citystatezip = "Los Angeles, CA", zws_id = "...")
+  # Now how to parse?
+  if (x$message$code == "0") {
+    # Keep these
+    x2 <- xmlChildren(xmlChildren(xmlChildren(x$response)$results)$result)
+    x2unlist <- unlist(sapply(xmlToList, X = x2))
+    vals <- x2unlist[c("address.street", "address.zipcode", "address.city", "useCode", "taxAssessmentYear",
+                       "more here...")]
+    dfRow <- as.data.frame(t(as.data.frame(vals)))
+    return(dfRow)
+  }
+  else {
+    return(NULL)
+  }
+}
+```

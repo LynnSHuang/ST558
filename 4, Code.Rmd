@@ -1,0 +1,179 @@
+---
+title: "4, Code"
+author: "Lynn Huang"
+date: "August 17, 2020"
+output: pdf_document
+---
+```{r setup, echo=FALSE}
+rm(list=ls())
+library(tidyverse)
+library(dplyr)
+setwd("C:/Users/lynn/OneDrive/Documents/ADULT/NCSU/ST558, Data Science for Statisticians")
+```
+
+#### 4.1 Manipulating Data: Logicals
+Logical statements are comparisons between 2 quantities.
+```{r}
+"hi" == " hi"
+"hi" == "hi"
+4 == 1
+4 != 1
+```
+
+Package tidyverse has package dplyr, useful for comparisons (esp. numeric).  
+Due to loss of precision, first one will be FALSE even though it's TRUE!
+```{r}
+sqrt(3)^2 == 3
+dplyr::near(sqrt(3)^2, 3)
+```
+
+Check type of object using is functions.
+```{r}
+is.numeric("Word")
+is.numeric(10)
+is.character("10")
+is.na(c(1:2, NA, 3))
+```
+Can use Boolean vector to index (which elements to include/exclude).
+Index using [], subset(), tidyverse/dplyr filter().
+```{r}
+# Tibble is like dataframe, just nicer printing properties
+iris <- tbl_df(iris)
+iris
+# How to get only "setosa" irises?
+iris$Species=="setosa"
+iris[iris$Species=="setosa",]
+subset(iris, Species=="setosa")
+dplyr::filter(iris, Species=="setosa")    # NOTE: dplyr:: not necessary if only 1 filter() function
+```
+Beware implicit or explicit coercion, when R changes element type from less to more flexible: logical, integer, double, character.
+```{r}
+# Implicit coercion using c()
+c("hi", 10)
+c(TRUE, FALSE) + 0
+c(TRUE, "hi")
+mean(c(TRUE, FALSE, TRUE))
+
+# Explicit coercion using as functions
+as.numeric(c(TRUE, FALSE, TRUE))
+as.character(c(1, 2, 3.5, TRUE))
+```
+
+Compound logic available with operators.
+```{r}
+# And using &. Or using |
+set.seed(3)
+(x <- runif(n=10, min=0, max=1))
+(x < 0.25) | (x > 0.75)
+# Double operators only check 1st comparison if given a vector
+(x < 0.25) || (x > 0.75)
+
+# Use logical operators to do multiple subsets on data
+filter(iris, (Petal.Length>1.5) & (Petal.Width>0.3) & (Species=="setosa"))
+iris[(iris$Petal.Length>1.5) & (iris$Petal.Width>0.3) & (iris$Species=="setosa"), ]
+
+```
+
+#### 4.2 Manipulating Data: Aside: R Packages
+#### 4.3 Manipulating Data: dplyr Package
+Lahman contains Major League Baseball data from 1871-2019 in 4 tables + others:  
+* People = Player names, dates of birth, death, biographical info  
+* Batting = Batting statistics  
+* Pitching = Pitching statistics  
+* Fielding = Fielding statistics  
+Other tables about teams, post-season play, awards, Hall of Fame, etc. also included. Use `help(Lahman)` to see more details.  
+```{r}
+#install.packages("Lahman")
+library(Lahman)
+head(Batting, n=4)
+
+# Tibble prints nicer
+Batting <- tbl_df(Batting)
+Batting
+
+# Subset to get only PIT data, only 2000
+filter(Batting, teamID=="PIT")
+filter(Batting, teamID=="PIT" & yearID==2000)
+
+# Re-order rows (default by ascending order)
+arrange(Batting, teamID)
+arrange(Batting, teamID, G)
+arrange(Batting, teamID, desc(G))
+
+# Subset columns: Select cols that match certain characteristic (contain X2B)
+# $ operator returns simplified vector form, select() returns same type of object (tibble)
+vec <- Batting$X2B
+tib <- select(Batting, X2B)
+
+# Piping/chanining can feed one function's output into another function's input
+arrange(select(filter(Batting, teamID=="PIT"), playerID, G, X2B), desc(X2B))
+Batting %>% filter(teamID=="PIT") %>% select(playerID, G, X2B) %>% arrange(desc(X2B))
+
+# Select columns using multiple types of criteria
+Batting %>% select(X2B:HR)
+Batting %>% select(contains("X"))
+Batting %>% select(starts_with("X"), ends_with("ID"), G)
+
+# Rename variables
+# NOTE: THis renaming isn't permanent, b/c we don't save output
+Batting %>%
+  select(starts_with("X"), ends_with("ID"), G) %>%
+  rename("Doubles"=X2B, "Triples"=X3B)
+
+# Re-order variables
+# everything() grabs all other variables, so this puts playerID 1st, HR 2nd, then all other cols
+Batting %>% select(playerID, HR, everything())
+```
+
+#### 4.4 Manipulating Data: Creating New Variables
+From fivethirtyeight.com, fandango dataframe of film ratings (n=146 films, p=23 cols).
+```{r}
+#install.packages("fivethirtyeight")
+library(fivethirtyeight)
+fandango
+
+# Add new column
+fandango %>% mutate(avgRotten = (rottentomatoes + rottentomatoes_user)/2)
+# Will be at the end (might have to scroll right in output), so select to view it up front
+fandango %>% 
+  mutate(avgRotten = (rottentomatoes + rottentomatoes_user)/2) %>%
+  select(avgRotten)
+
+# Transmute just grabs new column only (like mutate + select)
+fandango %>% transmute(avgRotten = (rottentomatoes + rottentomatoes_user)/2)
+
+# Summarize will apply basic functions like mean and sd to data
+fandango %>% summarise(avgStars = mean(fandango_stars), sdStars = sd(fandango_stars))
+
+# Can also summarize by group_by variable
+fandango %>% group_by(year) %>% summarise(avgSTars = mean(fandango_stars), sdStars = sd(fandango_stars))
+# NOTE: RUn this in console and you will see Groups: year[2] showing you've grouped by year into 2 groups
+
+# Conditional Execution with If-Then-Else
+# NOTE: Always GPP (good programming practice) to include base case if no conditions are met (else)
+# How to create new variable for large setosa flowers?
+# If can only take 1 comparison (see Warning), not meant for vectors
+if ((iris$Petal.Length>1.5) & (iris$Petal.Width>0.3) & (iris$Species=="setosa")) {
+  "Large Setosa"
+}
+
+# Use ifelse() function for a compound logical condition
+help(ifelse)
+ifelse((iris$Petal.Length>1.5) & (iris$Petal.Width>0.3) & (iris$Species=="setosa"), "L-S", "NotL-S")
+
+# To save this new data label, use transmute() (mutate + selects new col to view) or mutate()
+mutate(iris,
+       Size=ifelse((Petal.Length>1.5) & (Petal.Width>0.3) & (Species=="setosa"), "L-S", "NotL-S"))
+
+# Convert from wide to long data using gather() for machine learning
+(tempsData <- read_delim(file="./Data/cityTemps.txt", delim=" "))
+(newTempsData <- tempsData %>% gather(key=day, value=temp, 2:8))
+# Convert form long to wide data using 
+newTempsData %>% spread(key=day, value=temp)
+# NOTE: Same data set as before, although columns now alphabetically ordered
+
+# Split 1 col into multiple cols using separate()
+(chicagoData <- read_csv(file="./Data/Chicago.csv"))
+chicagoData %>% separate(date, c("Day", "Month", "Year"), sep="/")
+
+```
