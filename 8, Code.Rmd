@@ -1,0 +1,381 @@
+---
+title: "8, Code"
+author: "Lynn Huang"
+date: "September 7, 2020"
+output: pdf_document
+params:
+  team: "Pittsburgh Steelers"
+---
+  
+```{r setup, echo=FALSE}
+rm(list=ls())
+library(tidyverse)
+library(knitr)
+library(Lahman)
+setwd("C:/Users/lynn/OneDrive/Documents/ADULT/NCSU/ST558, Data Science for Statisticians")
+```
+
+#### 8.1 Improving R Programs: Loops  
+```{r FOR}
+# FOR LOOP: For each index i in values 1:10, do something
+for (i in 1:10){
+  print(i)
+}
+
+# Values don't have to be numeric
+for(index in c("cat", "hat", "worm"))
+  print(index)
+
+# Values don't have to be in any order
+words <- c("first", "second", "third", "fourth", "fifth")
+data <- runif(5)
+# Want to print out sentence of format "The nth data point is #."
+# Could require 5 lines of code, or 1 neat for-loop that iterates 5 times
+paste0("The ", words[1], " data point is ", data[1], ".")
+for (i in 1:5){
+  print(paste0("The ", words[i], " data point is ", data[i], "."))
+}
+
+# Find summary() for each col in dataset
+# Batting statistics for n=107429 observations on p=22 variables
+#help(Batting)
+newBatting <- Batting %>% as_tibble() %>% select(playerID, teamID, G, AB, R, H, X2B, X3B, HR)
+newBatting
+# Find summary() for a single column (col 3)
+summary(newBatting[, 3])
+# Find summary() for all cols using for-loop (skip char cols 1 and 2)
+for (i in 3:dim(newBatting)[2]){
+  print(summary(newBatting[, i]))
+}
+# Can also use seq_along() to get vector of ints referring to col nums
+for (i in seq_along(newBatting)[-1:-2]){
+  print(summary(newBatting[, i]))
+}
+
+# BREAK: Kicks you out of all loops
+for (i in 1:5){
+  if (i==3){
+    break
+  }
+  print(paste0("The ", words[i], " data point is ", data[i], "."))
+}
+# Note that it works for all loops!
+for (i in 1:5){
+  for (j in -5:-1){
+    if (j==-5) {break}
+    print(paste0("j=", j))
+  }
+  print(paste0("i=", i))
+}
+
+# NEXT: Jump to next iteration of innermost loop
+
+# Note that it only works on the innermost loop
+for (i in 1:5){
+  for (j in -5:-1){
+    if (j==-5) {break}
+    print(paste0("j=", j))
+  }
+  print(paste0("i=", i))
+}
+```
+
+```{r WHILE}
+# WHILE LOOP: While condition is TRUE, do something
+i=1
+while(i < 5){
+  print(i)
+  i <- i+1
+}
+```
+
+
+#### 8.2 Improving R Programs: Vectorized Functions & Apply 
+Loops are not the most efficient way when we want to work by row, by col, or by some other vectorized quantity! We'd prefer vectorized functions (later).  
+Why are for-loops slow in R?  
+1st, R must figure out what kind of object it is working with.  
+2nd, R deploys the right function for your object type.  
+For every iteration of the loop, it must repeat this as if the object were brand new, even if you are doing the exact same thing each iteration.  
+```{r VectorizedFunc}
+# Get some nice vectorized functions: colSds, colVars, colMedians
+#install.packages("matrixStats")
+library(matrixStats)
+
+# Practice using built-in vectorized functions
+colMeans(select(Batting, G:GIDP), na.rm=TRUE)
+
+# Time small programs and get average run time over several (100s) runs
+#install.packages("microbenchmark")
+library(microbenchmark)
+
+# Wrap code you want to microbenchmark
+# Time in milliseconds, reported in 5-number summary for neval=100 runs
+Bat <- Batting %>% select(G:GIDP)
+microbenchmark(
+  colMeans(Bat, na.rm=TRUE)
+)
+# Mean Time = 10.84047
+
+# Compare vectorized function to for-loop
+microbenchmark(
+  for (i in 1:ncol(Bat)){
+    mean(Bat[, i], na.rm=TRUE)
+  }
+)
+# Mean Time = 35.58592 is much longer, so less efficient!
+
+# How could we find median number of games (G), at bats (AB), and home runs (HR) for all players?
+# Group observations by playerID, then summarize variables of interest (removing non-numeric col)
+# Coerce to matrix, so you can apply colMedians() or summarise()
+Batting %>% group_by(playerID) %>% summarise(totG=sum(G), totAB=sum(AB), totHR=sum(HR)) %>% 
+  select(-playerID) %>% as.matrix() %>% colMedians(na.rm = TRUE)
+
+# How could we find avg temp for different categories of wind speed?
+# Daily air quality measurement sin New York from Day 1 to 153 (May to Sep in 1973) for n=153, p=6
+data(airquality)
+airquality <- as_tibble(airquality)
+airquality
+
+# Less Efficient: Loop thru each of n=153 obs of Wind and use ifelse to specify category
+status <- vector()
+for (i in seq_len(nrow(airquality))){
+  if (airquality$Wind[i] >= 15){status[i] <- "HighWind"}
+  else if (airquality$Wind[i] >= 10){status[i] <- "Windy"}
+  else if (airquality$Wind[i] >= 6){status[i] <- "LightWind"}
+  else if (airquality$Wind[i] >= 0){status[i] <- "Calm"}
+  else {status[i] <- "Error"}
+}
+status
+# Add status to airquality tibble
+airquality$status <- status
+# Can make calculations grouped by status, like mean temp
+airquality %>% group_by(status) %>% mutate(avgTemp = mean(Temp))
+
+# More Efficient: Use vectorized ifelse() to replace for-loop!
+# Recall format ifelse(vector_condition, if_true_do_this, if_false_do_this)
+status2 <- ifelse(airquality$Wind >= 15, 
+                  "HighWind", 
+                  ifelse(airquality$Wind >= 10, 
+                         "Windy", 
+                         ifelse(airquality$Wind >= 6, "LightWind", "Calm")))
+# Note the perfect agreement in results (so same results, just different run times)
+table(status, status2)
+
+# Compare run times
+loopTime<-microbenchmark(
+  for (i in seq_len(nrow(airquality))){
+  if (airquality$Wind[i] >= 15){status[i] <- "HighWind"}
+  else if (airquality$Wind[i] >= 10){status[i] <- "Windy"}
+  else if (airquality$Wind[i] >= 6){status[i] <- "LightWind"}
+  else if (airquality$Wind[i] >= 0){status[i] <- "Calm"}
+  else {status[i] <- "Error"}
+  }
+  , unit = "us")
+
+vectorTime <- microbenchmark(
+  ifelse(airquality$Wind >= 15, 
+                  "HighWind", 
+                  ifelse(airquality$Wind >= 10, 
+                         "Windy", 
+                         ifelse(airquality$Wind >= 6, "LightWind", "Calm")))
+  , unit = "us")
+
+loopTime
+vectorTime
+# This will be in nanoseconds.
+mean(loopTime$time)/mean(vectorTime$time)
+```
+
+The family of apply() functions are not truly vectorized, but are also fast:  
+
+* apply()  
+* sapply()  
+* lapply()  
+
+There are others too, but we won't examine them in ST558.  
+```{r APPLY}
+# What is the apply() family of functions?
+# Return vector/array/list of values obtained by applying FUN function to MARGIN of array/matrix X
+help(apply)
+# apply(X, MARGIN, FUN, ...) syntax. MARGIN=2 means by cols
+apply(X=select(airquality, Ozone:Temp), MARGIN=2, FUN=summary, na.rm=TRUE)
+# You can write your own functions too (unnamed function here b/c unnamed)
+apply(X=select(airquality, Ozone:Temp), MARGIN=2,
+			FUN = function(x) {
+				temp <- c(mean(x, na.rm=TRUE), sd(x, na.rm=TRUE))
+				names(temp) <- c("mean", "sd")
+				temp
+			}
+)
+# Note the mean values are the same in both apply() cases, as they should be!
+
+# lapply(X, FUN, ...). Accepts list X, returns list of same length
+help(lapply)
+fit <- lm(Ozone ~ Wind, data = airquality)
+fit <- list(fit$residuals, fit$effects, fit$fitted.values)
+fit[[1]]
+fit[[2]]
+fit[[3]]
+
+# What's the difference?
+lapply(X = fit, FUN = mean)       # Returns list of 3 to correspond to input type
+sapply(X = fit, FUN = mean)       # Returns vector of 3, which is simplified response type
+
+# Not as efficient as vectorized functions, but better than for-loop!
+air2 <- select(airquality, Ozone:Day)
+microbenchmark(apply(X = air2, MARGIN = 2, FUN = mean, na.rm = TRUE))
+microbenchmark(colMeans(air2, na.rm = TRUE))
+```
+
+#### 8.3 Improving R Programs: Parallel Computing
+Often used in cross-validation or long computations where tasks need not be sequential.  
+```{r Parallel}
+# Use cross-validation to fit best classification model of survived or not on titanicData
+# Contains information about n=1310 passengers, p=14 variables
+# pclass = Categorical numeric for the passenger's fare class (1,2,3)  
+# survived = Numeric factor where 0=died (lower level) and 1=survived (higher level)  
+# name = Character  
+# sex = Character (female/male)  
+# age = Numeric (includes decimals)  
+# sibsp = Numeric (number of siblings or spouses aboard)
+# parch = Numeric (number of parents or children aboard)
+# ticket = Numeric ticket number
+# fare = Numeric fare paid
+# cabin = Character cabin number
+# embarked = Port of embarkation (C=Cherbourg, Q=Queenstown, S=Southampton)
+# boat = Lifeboat number (if they survived, else NA)
+# body = Body number (if they died and body was recovered, else NA)
+# home.dest = Character (home destination)
+titanicData <- read_csv("./Data/titanic.csv")
+titanicData$survived <- as.factor(titanicData$survived)
+titanicData$pclass <- as.factor(titanicData$pclass)
+titanicData$sex <- as.factor(titanicData$sex)
+titanicData
+
+# MANUAL PARTITIONING: Kind of awful to do, so we'll use caret later
+# Before dividing into k random folds for CV, set seed for replicability
+set.seed(123)
+n = dim(titanicData)[1]     # Number of passengers
+k = 10                      # Number of folds (typically 10)
+# Sample n indices randomly w/o replacement, then split them into folds
+indices <- sample(n, replace = FALSE)
+head(indices)
+titanicData$fold <- vector(mode = "numeric", n)
+# Assign foldnum for first 1 to n/k, then (n/k+1) to (2*n/k), then ... elements
+for (foldnum in 1:k){
+  i.first <- (n/k)*(foldnum-1) + 1
+  i.last <- (n/k)*(foldnum)
+  # Include next commented-out command if you want to see the 130 indices that go in each fold
+  #print(indices[i.first:i.last])
+  titanicData$fold[indices[i.first:i.last]] <- foldnum
+}
+titanicData <- filter(titanicData, !is.na(survived)) # Remove 1 row with survived=NA
+
+# PARALLEL
+# 1st, Write your own helper functions to split data, perform model fit, then get results
+library(tree)
+# Split data so kth fold will be test, the rest is train data
+splitData <- function(data, foldnum) {
+  train <- filter(data, fold != foldnum)
+  test <- filter(data, fold == foldnum)
+  # Can return multiple items as list
+  list(train = train, test = test)
+}
+fitTitanicTree <- function(train, test){
+  # Only numeric or pre-crash categorical variables used as predictors (no name, boat, body, home.dest)
+  fit <- tree(survived ~ pclass + sex + age + ticket + fare + cabin + embarked, data = train)
+  preds <- predict(fit, newdata = test, type = "class")
+  misclass <- sum(abs(as.numeric(as.character(preds)) - as.numeric(as.character(test$survived))))
+  # Can return multiple items as list
+  return(list(fit = fit, preds = preds, misclass = misclass))
+}
+# Put previous 2 helper functions together into 1 big function to prep data, fit model, report results
+getResult <- function(x, data){
+  split <- splitData(data, foldnum = x)
+  fitTitanicTree(split$train, split$test)  
+}
+
+# Check if helper functions work in single instance of non-parallel lapply()?
+results <- lapply(1:k, FUN = getResult, data = titanicData)
+results[[1]]$preds
+results[[1]]$misclass
+# Dig into results List and get misclassification rate for each of k=10 folds
+# Function is '[' operator, which indexes in by "misclass" for each of the k=10 folds
+# '[' is usually infix operator, but here is used as prefix operator (before args)
+unlist(sapply(results, FUN = `[`, "misclass"))
+# CV misclassificaton rate is sum of misclassifications across all k=10 folds (get back n obs total)
+sum(unlist(sapply(results, FUN = `[`, "misclass")))/(n-1)
+# 0.3147441
+
+# 2nd, Ready to parallelize
+library(parallel)
+# Set up how many cores to use (leave at least 1 core for other computer tasks)
+cores <- detectCores()
+cores  
+cluster <- makeCluster(cores - 1)
+cluster
+# On Windows, export packages, functions to cores
+clusterExport(cluster, list("getResult", "splitData", "fitTitanicTree"))
+clusterEvalQ(cluster, library(tidyverse))
+clusterEvalQ(cluster, library(tree))
+
+# 3rd, Use parLapply() instead of lapply()
+resultsPar <- parLapply(cluster, X = 1:k, fun = getResult, data = titanicData)
+sum(unlist(sapply(resultsPar, FUN = `[`, "misclass")))/(n-1)
+# 0.3139801, similar to lapply() results! Prob only differs due to randomness
+
+# Was it worth it? Check and see parallel time was less!
+parTime <- microbenchmark(
+  {resultsPar <- parLapply(cluster, X = 1:k, fun = getResult, data = titanicData)
+  sum(unlist(sapply(resultsPar, FUN = `[`, "misclass")))/(n-1)},
+  times = 10,
+  unit = "s"
+  )
+# Might get some "NAs introduced by coercion" warning
+straightTime <- microbenchmark(
+  {results <- lapply(1:k, FUN = getResult, data = titanicData)
+  sum(unlist(sapply(results, FUN = `[`, "misclass")))/(n-1)},
+  times = 10,
+  unit = "s"
+  )
+# Try this in console for nicest printing
+print(parTime)
+print(straightTime)
+```
+
+#### 8.4 Improving R Programs: Automating R Markdown
+Go check out NFL.html file for sample output
+```{r}
+# Pull some NFL data
+NFLData <- read_csv("data/scoresFull.csv")
+NFLData
+# Make same type of analysis file on Cleveland Browns or Pittsburgh Steelers (team param we want to set)
+# NOTE: Such parameters can be specified in YAML header in the first place!
+# "Knit with parameters" button will use specified params in YAML header
+# Programatically automate with rmarkdown::render() and loop through set of params
+rmarkdown::render("NFL.Rmd", output_file="Cleveland Browns.html", params=list(team="Cleveland Browns"))
+data.frame(output_file="Pittsburgh Steelers.html", params=list(team="Pittsburgh Steelers"))
+
+# How to make same type of analysis file on each unique team?
+teamIDs <- unique(NFLData$awayTeam)
+# Create filenames, then store in lists with just that team param stored
+output_file <- paste0(teamIDs, ".html")
+params = lapply(teamIDs, FUN = function(x){list(team = x)})
+# Put into a data frame 
+reports <- tibble(output_file, params)
+reports
+
+# Could use for-loop, but prefer apply() family to render() each output_file and param
+library(rmarkdown)
+# Index by [[]] to get at elements since tibble doesn't simplify (tibbles & dfs are just lists)
+# Get rows (MARGIN=1) of reports, then take that row and apply render function to every row in reports
+apply(reports, 
+      MARGIN = 1,
+      FUN = function(x){render(input = "NFL.Rmd", output_file = x[[1]], params = x[[2]])}
+      )
+
+# Tidyverse purr (replaced apply() family functions): pwalk (args are .l, .f, and ...)
+#.l is a list of lists, .f is function, formula, or vector
+pwalk(reports, render, input="NFL.Rmd")
+```
+
